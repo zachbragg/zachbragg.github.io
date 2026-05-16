@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Logbook">
+<meta name="theme-color" content="#0e0d0c">
+<title>Logbook</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; }
+body {
+  height: 100%;
+  background: #0e0d0c;
+  color: #e2d9cc;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+#shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: -webkit-fill-available;
+}
+#hdr {
+  flex-shrink: 0;
+  padding-top: calc(env(safe-area-inset-top) + 14px);
+  padding-left: 20px;
+  padding-right: 20px;
+  background: #0e0d0c;
+  border-bottom: 0.5px solid #252220;
+}
+#hdr-row { display: flex; justify-content: space-between; align-items: center; padding-bottom: 14px; }
+#scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+#btm-nav {
+  flex-shrink: 0;
+  display: flex;
+  background: #0e0d0c;
+  border-top: 0.5px solid #252220;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tab {
+  flex: 1; padding: 12px 0; background: none; border: none;
+  border-top: 2px solid transparent; font-family: inherit;
+  font-size: 11px; letter-spacing: 0.12em; cursor: pointer;
+  color: #6b6258; -webkit-tap-highlight-color: transparent;
+}
+.tab.on { color: #e2d9cc; border-top-color: #c8811a; }
+input, textarea { font-family: inherit; -webkit-appearance: none; outline: none; color: #e2d9cc; }
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+input[type=number] { -moz-appearance: textfield; }
+textarea { resize: none; }
+input:focus, textarea:focus { border-color: #c8811a !important; }
+button { font-family: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button:active { opacity: 0.62; }
+.card { background: #1a1815; border: 0.5px solid #252220; border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
+.mono { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+.muted { color: #6b6258; }
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.68); z-index: 100; display: none; }
+.sheet {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: #1c1a17; border-radius: 18px 18px 0 0;
+  padding: 14px 20px calc(22px + env(safe-area-inset-bottom));
+  z-index: 101; display: none; max-height: 85vh; overflow-y: auto;
+}
+.handle { width: 36px; height: 4px; background: #3a3530; border-radius: 2px; margin: 0 auto 18px; }
+.feel-btn {
+  flex: 1; padding: 10px 4px; background: transparent;
+  border: 0.5px solid #252220; border-radius: 8px; color: #6b6258;
+  text-align: center; cursor: pointer; display: flex; flex-direction: column;
+  align-items: center; gap: 3px;
+}
+.feel-btn.sel { border-color: #c8811a; color: #c8811a; background: rgba(200,129,26,0.1); }
+.fnum { font-family: 'SF Mono', Menlo, monospace; font-size: 17px; }
+.flbl { font-size: 8px; letter-spacing: 0.04em; }
+.sinp {
+  text-align: center; font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 15px; background: #141210; border: 0.5px solid #252220;
+  border-radius: 8px; padding: 10px 4px; color: #e2d9cc;
+}
+.sinp:focus { border-color: #c8811a !important; }
+.ghost { padding: 8px 16px; background: transparent; border: 0.5px solid #252220; border-radius: 8px; color: #6b6258; font-size: 11px; letter-spacing: 0.1em; }
+</style>
+</head>
+<body>
+
+<div id="shell">
+  <div id="hdr">
+    <div id="hdr-row">
+      <span class="mono" style="font-size:11px;color:#c8811a;letter-spacing:0.15em;font-weight:500;">LOGBOOK</span>
+      <span class="mono muted" id="hdr-date" style="font-size:10px;"></span>
+    </div>
+  </div>
+  <div id="scroll"></div>
+  <div id="btm-nav"></div>
+</div>
+
+<!-- Intensifier picker sheet -->
+<div class="overlay" id="int-bg" onclick="closeIntSheet()"></div>
+<div class="sheet" id="int-sheet">
+  <div class="handle"></div>
+  <div style="font-size:10px;letter-spacing:0.1em;color:#6b6258;margin-bottom:12px;">SELECT INTENSIFIER</div>
+  <div id="int-list"></div>
+  <button onclick="selectInt('')" class="ghost" style="width:100%;padding:13px;margin-top:6px;font-size:12px;letter-spacing:0.1em;">NONE</button>
+</div>
+
+<!-- Finish confirmation sheet -->
+<div class="overlay" id="fin-bg"></div>
+<div class="sheet" id="fin-sheet">
+  <div class="handle"></div>
+  <div style="font-size:17px;font-weight:500;margin-bottom:4px;">End session?</div>
+  <div id="fin-summary" class="mono muted" style="font-size:12px;margin-bottom:18px;"></div>
+  <div style="font-size:10px;letter-spacing:0.08em;color:#6b6258;margin-bottom:10px;">HOW DID IT GO?</div>
+  <div id="fin-feel" style="display:flex;gap:6px;margin-bottom:22px;"></div>
+  <div style="display:flex;gap:10px;">
+    <button onclick="cancelFinish()" class="ghost" style="flex:1;padding:14px;font-size:12px;letter-spacing:0.1em;">CANCEL</button>
+    <button onclick="confirmFinish()" style="flex:2;padding:14px;background:#c8811a;border:none;border-radius:10px;color:#0e0d0c;font-size:12px;letter-spacing:0.12em;font-weight:600;">SAVE SESSION</button>
+  </div>
+</div>
+
+<!-- Delete confirmation sheet -->
+<div class="overlay" id="del-bg" onclick="cancelDelete()"></div>
+<div class="sheet" id="del-sheet">
+  <div class="handle"></div>
+  <div style="font-size:17px;font-weight:500;margin-bottom:5px;">Delete this session?</div>
+  <div style="font-size:13px;color:#6b6258;margin-bottom:24px;">This cannot be undone.</div>
+  <div style="display:flex;gap:10px;">
+    <button onclick="cancelDelete()" class="ghost" style="flex:1;padding:14px;font-size:12px;letter-spacing:0.1em;">CANCEL</button>
+    <button onclick="confirmDelete()" style="flex:1;padding:14px;background:#7a2820;border:none;border-radius:10px;color:#e2d9cc;font-size:12px;letter-spacing:0.1em;font-weight:600;">DELETE</button>
+  </div>
+</div>
+
+<script>
+const STORE = 'zach_logbook_v1';
+
+const INTENSIFIERS = [
+  'Rest Pause','Drop Set','Myo-Reps','Giant Set',
+  'Superset','Forced Reps','Partials','Mechanical Drop'
+];
+const INT_ABBR = {
+  'Rest Pause':'RP','Drop Set':'DS','Myo-Reps':'MR','Giant Set':'GS',
+  'Superset':'SS','Forced Reps':'FR','Partials':'PTL','Mechanical Drop':'MD'
+};
+const FEEL_LABEL = ['','Terrible','Bad','Okay','Good','Great'];
+
+let workouts = [], view = 'today', detail = null;
+let session = blankSession();
+let intTarget = null, deleteTargetId = null, feelAfterVal = 0;
+let tState = 'idle', tStartedAt = null, tPauseStart = null, tPauses = [], tInterval = null;
+
+try { workouts = JSON.parse(localStorage.getItem(STORE)) || []; } catch { workouts = []; }
+
+function blankSession() {
+  return { name:'', bodyweight:'', feelBefore:0, feelAfter:0, notes:'', exercises:[] };
+}
+const uid = () => Math.random().toString(36).slice(2, 9);
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const persist = () => { try { localStorage.setItem(STORE, JSON.stringify(workouts)); } catch {} };
+
+function fmtDMY(iso) {
+  const d = new Date(iso);
+  return `${d.getDate()} ${d.toLocaleString('en-US',{month:'short'}).toUpperCase()} ${d.getFullYear()}`;
+}
+function fmtHHMM(ts) {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function fmtMs(ms) {
+  if (!ms || ms <= 0) return null;
+  const s = Math.floor(ms/1000), h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
+}
+function fmtElapsed(ms) {
+  const s = Math.floor(ms/1000), h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+
+function getLastSession(name) {
+  const n = name.trim().toLowerCase();
+  if (!n) return null;
+  for (let i = workouts.length-1; i >= 0; i--) {
+    const ex = workouts[i].exercises?.find(e => e.name.trim().toLowerCase() === n);
+    if (ex?.sets?.length) return ex;
+  }
+  return null;
+}
+
+// Timer
+function getNetMs() {
+  if (!tStartedAt) return 0;
+  const cap = tState === 'paused' ? tPauseStart : Date.now();
+  return Math.max(0, cap - tStartedAt - tPauses.reduce((s,p) => s+p.ms, 0));
+}
+function getTotalPauseMs() {
+  return tPauses.reduce((s,p) => s+p.ms, 0) + (tState==='paused'&&tPauseStart ? Date.now()-tPauseStart : 0);
+}
+function startTimer() {
+  tStartedAt = Date.now(); tState = 'running';
+  tInterval = setInterval(() => { const el=document.getElementById('tval'); if(el) el.textContent=fmtElapsed(getNetMs()); }, 1000);
+  renderTimerBar();
+}
+function pauseTimer() {
+  tPauseStart = Date.now(); tState = 'paused';
+  clearInterval(tInterval); tInterval = null;
+  renderTimerBar();
+}
+function resumeTimer() {
+  tPauses.push({start:tPauseStart, end:Date.now(), ms:Date.now()-tPauseStart});
+  tPauseStart = null; tState = 'running';
+  tInterval = setInterval(() => { const el=document.getElementById('tval'); if(el) el.textContent=fmtElapsed(getNetMs()); }, 1000);
+  renderTimerBar();
+}
+function renderTimerBar() {
+  const el = document.getElementById('timer-bar');
+  if (!el) return;
+  if (tState === 'idle') {
+    el.innerHTML = `<button onclick="startTimer()" style="width:100%;padding:14px;background:#1c1a17;border:0.5px solid #2a2724;border-radius:10px;color:#c8811a;font-size:11px;letter-spacing:0.15em;font-weight:500;">START WORKOUT</button>`;
+    return;
+  }
+  const paused = tState === 'paused';
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;background:#141210;border-radius:10px;padding:12px 16px;border:0.5px solid ${paused?'#252220':'rgba(200,129,26,0.2)'};">
+      <div style="display:flex;align-items:baseline;gap:10px;">
+        <span class="mono" id="tval" style="font-size:28px;color:${paused?'#6b6258':'#e2d9cc'};">${fmtElapsed(getNetMs())}</span>
+        ${paused?'<span style="font-size:9px;letter-spacing:0.1em;color:#6b6258;">PAUSED</span>':''}
+      </div>
+      <button onclick="${paused?'resumeTimer()':'pauseTimer()'}"
+        style="padding:9px 16px;background:${paused?'#c8811a':'transparent'};border:0.5px solid ${paused?'#c8811a':'#3a3530'};border-radius:8px;color:${paused?'#0e0d0c':'#6b6258'};font-size:10px;letter-spacing:0.1em;font-weight:${paused?'600':'400'};">
+        ${paused?'RESUME':'PAUSE'}
+      </button>
+    </div>`;
+}
+
+// Session ops
+function addEx() {
+  session.exercises.push({id:uid(), name:'', sets:[], notes:''});
+  render();
+  setTimeout(() => { const sc=document.getElementById('scroll'); if(sc) sc.scrollTop=sc.scrollHeight; }, 60);
+}
+function removeEx(id) { session.exercises = session.exercises.filter(e => e.id !== id); render(); }
+function addSet(exId) {
+  const ex = session.exercises.find(e => e.id === exId);
+  if (!ex) return;
+  const last = ex.sets[ex.sets.length-1];
+  ex.sets.push({id:uid(), weight:last?.weight||'', reps:last?.reps||'', intensifier:''});
+  patchSets(exId);
+}
+function removeSet(exId, sId) {
+  const ex = session.exercises.find(e => e.id === exId);
+  if (ex) { ex.sets = ex.sets.filter(s => s.id !== sId); patchSets(exId); }
+}
+function patchSets(exId) {
+  const ex = session.exercises.find(e => e.id === exId);
+  const el = document.getElementById('sets-'+exId);
+  if (el && ex) el.innerHTML = setsHTML(ex);
+}
+function updateSet(exId, sId, f, v) {
+  const s = session.exercises.find(e => e.id === exId)?.sets.find(s => s.id === sId);
+  if (s) s[f] = v;
+}
+function updateEx(exId, f, v) {
+  const ex = session.exercises.find(e => e.id === exId);
+  if (ex) ex[f] = v;
+}
+function onExName(exId, val) {
+  updateEx(exId, 'name', val);
+  const last = getLastSession(val);
+  const el = document.getElementById('last-'+exId);
+  if (el) { el.style.display = last?'block':'none'; if (last) el.innerHTML = lastRefHTML(last); }
+}
+function toggleNotes(exId) {
+  const area = document.getElementById('notes-'+exId);
+  const btn  = document.getElementById('nbtn-'+exId);
+  if (!area||!btn) return;
+  const show = area.style.display === 'none';
+  area.style.display = show ? 'block' : 'none';
+  btn.style.color = show ? '#c8811a' : '#6b6258';
+  if (show) setTimeout(() => { area.focus(); area.scrollIntoView({behavior:'smooth',block:'nearest'}); }, 60);
+}
+function setFeelBefore(v) {
+  session.feelBefore = v;
+  const el = document.getElementById('feel-before-row');
+  if (el) el.innerHTML = feelRowHTML(v, 'setFeelBefore');
+}
+
+// Intensifier sheet
+function openIntSheet(exId, sId) {
+  intTarget = {exId, sId};
+  const current = session.exercises.find(e=>e.id===exId)?.sets.find(s=>s.id===sId)?.intensifier || '';
+  document.getElementById('int-list').innerHTML = INTENSIFIERS.map(v => {
+    const sel = v === current;
+    return `<button onclick="selectInt('${v}')"
+      style="display:block;width:100%;text-align:left;padding:13px 16px;background:${sel?'rgba(200,129,26,0.1)':'transparent'};border:0.5px solid ${sel?'#c8811a':'#252220'};border-radius:10px;color:${sel?'#c8811a':'#e2d9cc'};font-size:15px;margin-bottom:6px;">
+      ${v}${sel?' <span style="float:right;">✓</span>':''}
+    </button>`;
+  }).join('');
+  document.getElementById('int-bg').style.display   = 'block';
+  document.getElementById('int-sheet').style.display = 'block';
+}
+function selectInt(val) {
+  if (!intTarget) return;
+  updateSet(intTarget.exId, intTarget.sId, 'intensifier', val);
+  patchSets(intTarget.exId);
+  closeIntSheet();
+}
+function closeIntSheet() {
+  intTarget = null;
+  document.getElementById('int-bg').style.display   = 'none';
+  document.getElementById('int-sheet').style.display = 'none';
+}
+
+// Finish flow
+function openFinishSheet() {
+  feelAfterVal = session.feelAfter || 0;
+  let summary = '';
+  if (tStartedAt) {
+    const net = fmtMs(getNetMs()), pms = getTotalPauseMs();
+    summary = fmtHHMM(tStartedAt);
+    if (net) summary += ' · ' + net;
+    if (pms > 5000) summary += ' · ' + fmtMs(pms) + ' paused';
+  }
+  document.getElementById('fin-summary').textContent = summary;
+  document.getElementById('fin-feel').innerHTML = feelRowHTML(feelAfterVal, 'setFeelAfterVal');
+  document.getElementById('fin-bg').style.display    = 'block';
+  document.getElementById('fin-sheet').style.display = 'block';
+}
+function setFeelAfterVal(v) {
+  feelAfterVal = v;
+  const el = document.getElementById('fin-feel');
+  if (el) el.innerHTML = feelRowHTML(v, 'setFeelAfterVal');
+}
+function cancelFinish() {
+  document.getElementById('fin-bg').style.display    = 'none';
+  document.getElementById('fin-sheet').style.display = 'none';
+}
+function confirmFinish() {
+  if (tInterval) { clearInterval(tInterval); tInterval = null; }
+  const endedAt = Date.now();
+  workouts.push({
+    id:         uid(),
+    date:       tStartedAt ? new Date(tStartedAt).toISOString() : new Date().toISOString(),
+    name:       session.name || 'Session',
+    bodyweight: session.bodyweight,
+    feelBefore: session.feelBefore,
+    feelAfter:  feelAfterVal,
+    notes:      session.notes,
+    timer: { startedAt:tStartedAt, endedAt, netMs:getNetMs(), pauseMs:getTotalPauseMs(), pauses:[...tPauses] },
+    exercises:  JSON.parse(JSON.stringify(session.exercises))
+  });
+  persist();
+  session = blankSession();
+  tState='idle'; tStartedAt=null; tPauseStart=null; tPauses=[]; feelAfterVal=0;
+  document.getElementById('fin-bg').style.display    = 'none';
+  document.getElementById('fin-sheet').style.display = 'none';
+  render();
+}
+
+// Delete flow
+function openDeleteSheet(id) {
+  deleteTargetId = id;
+  document.getElementById('del-bg').style.display    = 'block';
+  document.getElementById('del-sheet').style.display = 'block';
+}
+function cancelDelete() {
+  deleteTargetId = null;
+  document.getElementById('del-bg').style.display    = 'none';
+  document.getElementById('del-sheet').style.display = 'none';
+}
+function confirmDelete() {
+  if (!deleteTargetId) return;
+  workouts = workouts.filter(w => w.id !== deleteTargetId);
+  persist();
+  deleteTargetId = null;
+  document.getElementById('del-bg').style.display    = 'none';
+  document.getElementById('del-sheet').style.display = 'none';
+  setView('history');
+}
+
+// Resume
+function resumeSession(id) {
+  const w = workouts.find(w => w.id === id);
+  if (!w) return;
+  workouts = workouts.filter(w2 => w2.id !== id);
+  persist();
+  session = {
+    name:       w.name||'', bodyweight:w.bodyweight||'',
+    feelBefore: w.feelBefore||0, feelAfter:0,
+    notes:      w.notes||'',
+    exercises:  JSON.parse(JSON.stringify(w.exercises||[]))
+  };
+  tState='idle'; tStartedAt=null; tPauseStart=null; tPauses=[];
+  setView('today');
+}
+
+// Nav
+function setView(v, id) {
+  view   = v;
+  detail = id ? workouts.find(w => w.id === id) : null;
+  render();
+  const sc = document.getElementById('scroll');
+  if (sc) sc.scrollTop = 0;
+}
+
+// HTML helpers
+function feelRowHTML(sel, cb) {
+  return FEEL_LABEL.slice(1).map((label, i) => {
+    const v = i+1, s = sel === v;
+    return `<button class="feel-btn${s?' sel':''}" onclick="${cb}(${v})"><span class="fnum">${v}</span><span class="flbl">${label.toUpperCase()}</span></button>`;
+  }).join('');
+}
+
+function lastRefHTML(last) {
+  const sets = last.sets.map(s => {
+    let str = `${esc(s.weight||'?')}×${esc(s.reps||'?')}`;
+    if (s.intensifier) str += ` <span style="color:#c8811a;font-size:9px;">${esc(INT_ABBR[s.intensifier]||s.intensifier)}</span>`;
+    return `<span style="margin-right:8px;">${str}</span>`;
+  }).join('');
+  return `<div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;">
+    <span class="mono muted" style="font-size:9px;letter-spacing:0.1em;font-weight:500;flex-shrink:0;">LAST</span>
+    <span class="mono" style="font-size:11px;color:#8a8278;">${sets}</span>
+  </div>${last.notes?`<div style="font-size:11px;color:#6b6258;font-style:italic;margin-top:2px;">${esc(last.notes)}</div>`:''}`;
+}
+
+function setsHTML(ex) {
+  if (!ex.sets.length) return '';
+  return ex.sets.map((s, i) => {
+    const abbr = s.intensifier ? (INT_ABBR[s.intensifier]||s.intensifier) : '—';
+    const hi   = !!s.intensifier;
+    return `<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;">
+      <span class="mono muted" style="font-size:10px;width:16px;text-align:right;flex-shrink:0;">${i+1}</span>
+      <input type="number" inputmode="decimal" placeholder="lbs" value="${esc(s.weight)}"
+        oninput="updateSet('${ex.id}','${s.id}','weight',this.value)" class="sinp" style="width:66px;" />
+      <span class="muted" style="font-size:15px;flex-shrink:0;">×</span>
+      <input type="number" inputmode="numeric" placeholder="reps" value="${esc(s.reps)}"
+        oninput="updateSet('${ex.id}','${s.id}','reps',this.value)" class="sinp" style="width:56px;" />
+      <button onclick="openIntSheet('${ex.id}','${s.id}')"
+        style="flex-shrink:0;padding:7px 9px;border-radius:6px;border:0.5px solid ${hi?'#c8811a':'#252220'};font-size:9px;letter-spacing:0.06em;font-weight:600;min-width:34px;background:${hi?'rgba(200,129,26,0.12)':'transparent'};color:${hi?'#c8811a':'#6b6258'};">
+        ${abbr}
+      </button>
+      <button onclick="removeSet('${ex.id}','${s.id}')"
+        style="margin-left:auto;background:none;border:none;color:#6b6258;font-size:22px;line-height:1;padding:4px 8px;flex-shrink:0;opacity:0.4;">×</button>
+    </div>`;
+  }).join('');
+}
+
+function exCardHTML(ex) {
+  const last = getLastSession(ex.name);
+  return `<div class="card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <input type="text" placeholder="Exercise name" value="${esc(ex.name)}"
+        oninput="onExName('${ex.id}',this.value)"
+        style="flex:1;background:transparent;border:none;border-bottom:0.5px solid #2a2724;border-radius:0;padding:5px 0;font-size:18px;font-weight:500;" />
+      <button onclick="removeEx('${ex.id}')" style="background:none;border:none;color:#6b6258;font-size:22px;line-height:1;padding:4px 6px;opacity:0.4;">×</button>
+    </div>
+    <div id="last-${ex.id}" style="display:${last?'block':'none'};margin-bottom:12px;padding:8px 11px;background:#141210;border-radius:8px;border-left:2px solid rgba(200,129,26,0.4);">
+      ${last ? lastRefHTML(last) : ''}
+    </div>
+    <div id="sets-${ex.id}">${setsHTML(ex)}</div>
+    <div style="display:flex;gap:8px;margin-top:6px;">
+      <button onclick="addSet('${ex.id}')" class="ghost">+ SET</button>
+      <button id="nbtn-${ex.id}" onclick="toggleNotes('${ex.id}')" class="ghost" style="color:${ex.notes?'#c8811a':'#6b6258'};">NOTES</button>
+    </div>
+    <textarea id="notes-${ex.id}" placeholder="Too easy, skip next week, switch to machine..."
+      oninput="updateEx('${ex.id}','notes',this.value)" rows="2"
+      style="display:${ex.notes?'block':'none'};margin-top:10px;width:100%;font-size:14px;font-style:italic;color:#8a8278;background:#141210;border:0.5px solid #252220;border-radius:8px;padding:10px 12px;"
+    >${esc(ex.notes)}</textarea>
+  </div>`;
+}
+
+// Views
+function todayHTML() {
+  const has = session.name || session.exercises.some(e => e.name || e.sets.length);
+  return `<div style="padding:18px 16px 30px;">
+    <input type="text" placeholder="Session name  —  Chest + Abs, Back..."
+      value="${esc(session.name)}"
+      oninput="session.name=this.value; const b=document.getElementById('fin-btn'); if(b) b.style.display=(session.name||session.exercises.some(e=>e.name||e.sets.length))?'block':'none';"
+      style="width:100%;background:transparent;border:none;border-bottom:0.5px solid #252220;border-radius:0;padding:8px 0;font-size:22px;font-weight:500;margin-bottom:16px;" />
+
+    <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:18px;">
+      <div>
+        <div style="font-size:9px;letter-spacing:0.1em;color:#6b6258;margin-bottom:7px;">BODYWEIGHT</div>
+        <input type="number" inputmode="decimal" placeholder="lbs" value="${esc(session.bodyweight)}"
+          oninput="session.bodyweight=this.value"
+          style="width:82px;background:#141210;border:0.5px solid #252220;border-radius:8px;padding:9px 10px;font-size:15px;font-family:'SF Mono',Menlo,monospace;" />
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:9px;letter-spacing:0.1em;color:#6b6258;margin-bottom:7px;">HOW ARE YOU FEELING?</div>
+        <div style="display:flex;gap:5px;" id="feel-before-row">${feelRowHTML(session.feelBefore, 'setFeelBefore')}</div>
+      </div>
+    </div>
+
+    <div id="timer-bar" style="margin-bottom:20px;">
+      <button onclick="startTimer()" style="width:100%;padding:14px;background:#1c1a17;border:0.5px solid #2a2724;border-radius:10px;color:#c8811a;font-size:11px;letter-spacing:0.15em;font-weight:500;">START WORKOUT</button>
+    </div>
+
+    ${session.exercises.map(exCardHTML).join('')}
+
+    <button onclick="addEx()" class="ghost" style="width:100%;padding:16px;border-style:dashed;color:#6b6258;font-size:11px;letter-spacing:0.1em;border-radius:12px;margin-bottom:16px;">
+      + ADD EXERCISE
+    </button>
+
+    <div style="margin-bottom:16px;">
+      <div style="font-size:9px;letter-spacing:0.1em;color:#6b6258;margin-bottom:8px;">SESSION NOTES</div>
+      <textarea placeholder="Slept like shit, joints felt off, PR day..."
+        oninput="session.notes=this.value" rows="2"
+        style="width:100%;font-size:14px;font-style:italic;color:#8a8278;background:#141210;border:0.5px solid #252220;border-radius:8px;padding:10px 12px;"
+      >${esc(session.notes)}</textarea>
+    </div>
+
+    <button id="fin-btn" onclick="openFinishSheet()"
+      style="display:${has?'block':'none'};width:100%;padding:16px;background:#c8811a;border:none;border-radius:12px;color:#0e0d0c;font-size:12px;letter-spacing:0.15em;font-weight:600;">
+      FINISH SESSION
+    </button>
+  </div>`;
+}
+
+function historyHTML() {
+  if (!workouts.length) return `<div style="text-align:center;padding:72px 20px;color:#6b6258;"><div style="font-size:44px;margin-bottom:14px;">📓</div><div style="font-size:14px;">No sessions logged yet.</div></div>`;
+  return `<div style="padding:18px 16px 30px;">
+    ${[...workouts].reverse().map((w, idx) => `
+      <button onclick="setView('detail','${w.id}')"
+        style="display:block;width:100%;text-align:left;background:#1a1815;border:0.5px solid #252220;border-radius:12px;padding:14px 16px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">
+          <span style="font-size:17px;font-weight:500;color:#e2d9cc;">${esc(w.name)}</span>
+          <span class="mono muted" style="font-size:10px;">${fmtDMY(w.date)}</span>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <span style="font-size:13px;color:#6b6258;">${w.exercises.length} exercise${w.exercises.length!==1?'s':''}</span>
+          ${w.timer?.netMs   ? `<span class="mono muted" style="font-size:11px;">${fmtMs(w.timer.netMs)}</span>` : ''}
+          ${w.bodyweight     ? `<span class="mono muted" style="font-size:11px;">${esc(w.bodyweight)} lbs</span>` : ''}
+          ${w.feelAfter      ? `<span style="font-size:11px;color:#6b6258;">${FEEL_LABEL[w.feelAfter]}</span>` : ''}
+        </div>
+        ${idx === 0 ? `<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid #252220;">
+          <button onclick="event.stopPropagation();resumeSession('${w.id}')"
+            style="padding:7px 14px;background:rgba(200,129,26,0.1);border:0.5px solid rgba(200,129,26,0.3);border-radius:7px;color:#c8811a;font-size:11px;letter-spacing:0.08em;">
+            RESUME SESSION
+          </button>
+        </div>` : ''}
+      </button>
+    `).join('')}
+  </div>`;
+}
+
+function detailHTML(w) {
+  const started = w.timer?.startedAt ? fmtHHMM(w.timer.startedAt) : null;
+  const ended   = w.timer?.endedAt   ? fmtHHMM(w.timer.endedAt)   : null;
+  const net     = w.timer?.netMs     ? fmtMs(w.timer.netMs)        : null;
+  const paused  = w.timer?.pauseMs && w.timer.pauseMs > 5000 ? fmtMs(w.timer.pauseMs) : null;
+  return `<div style="padding:18px 16px 30px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <button onclick="setView('history')" style="background:none;border:none;color:#6b6258;font-size:12px;letter-spacing:0.06em;padding:0;">← BACK</button>
+      <button onclick="openDeleteSheet('${w.id}')" style="background:none;border:none;color:#6b6258;font-size:12px;letter-spacing:0.06em;padding:0;">DELETE</button>
+    </div>
+    <div style="font-size:21px;font-weight:500;color:#e2d9cc;margin-bottom:5px;">${esc(w.name)}</div>
+    <div class="mono muted" style="font-size:10px;margin-bottom:16px;">${fmtDMY(w.date)}</div>
+
+    ${started||net ? `<div style="background:#141210;border-radius:10px;padding:14px;margin-bottom:14px;display:flex;gap:20px;flex-wrap:wrap;">
+      ${started ? `<div><div style="font-size:9px;letter-spacing:0.08em;color:#6b6258;margin-bottom:3px;">STARTED</div><div class="mono" style="font-size:15px;">${started}</div></div>` : ''}
+      ${ended   ? `<div><div style="font-size:9px;letter-spacing:0.08em;color:#6b6258;margin-bottom:3px;">ENDED</div><div class="mono" style="font-size:15px;">${ended}</div></div>` : ''}
+      ${net     ? `<div><div style="font-size:9px;letter-spacing:0.08em;color:#6b6258;margin-bottom:3px;">DURATION</div><div class="mono" style="font-size:15px;">${net}</div></div>` : ''}
+      ${paused  ? `<div><div style="font-size:9px;letter-spacing:0.08em;color:#6b6258;margin-bottom:3px;">PAUSED</div><div class="mono" style="font-size:15px;">${paused}</div></div>` : ''}
+    </div>` : ''}
+
+    ${(w.bodyweight||w.feelBefore||w.feelAfter) ? `<div style="background:#141210;border-radius:10px;padding:14px;margin-bottom:14px;display:flex;gap:20px;flex-wrap:wrap;">
+      ${w.bodyweight ? `<div><div style="font-size:9px;letter-spacing:0.08em;color:#6b6258;margin-bottom:3px;">BODYWEIGHT</div><div class="mono" style="font-size:15px;">${esc(w.bodyweight)} lbs</div></div>` : ''}
+      ${w.feelBefore ? `<div><div style="font-size:9px;letter-spacing:0.08em;color:#6b6258;margin-bottom:3px;">FELT BEFORE</div><div style="font-size:15px;">${FEEL_LABEL[w.feelBefore]}</div></div>` : ''}
+      ${w.feelAfter  ? `<div><div style="font-size:9px;letter-spacing:0.08em;color:#6b6258;margin-bottom:3px;">FELT AFTER</div><div style="font-size:15px;">${FEEL_LABEL[w.feelAfter]}</div></div>` : ''}
+    </div>` : ''}
+
+    ${w.notes ? `<div style="font-size:13px;color:#6b6258;font-style:italic;padding:12px 14px;background:#141210;border-radius:10px;margin-bottom:14px;">${esc(w.notes)}</div>` : ''}
+
+    ${w.exercises.map(ex => `<div class="card">
+      <div style="font-size:17px;font-weight:500;margin-bottom:12px;color:#e2d9cc;">${esc(ex.name||'Unnamed')}</div>
+      ${ex.sets.map((s,i) => `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <span class="mono muted" style="font-size:10px;width:16px;text-align:right;">${i+1}</span>
+        <span class="mono" style="font-size:15px;color:#e2d9cc;">${esc(s.weight||'?')}×${esc(s.reps||'?')}</span>
+        ${s.intensifier ? `<span style="font-size:10px;padding:2px 9px;border-radius:4px;background:rgba(200,129,26,0.12);color:#c8811a;border:0.5px solid rgba(200,129,26,0.3);">${esc(s.intensifier)}</span>` : ''}
+      </div>`).join('')}
+      ${ex.notes ? `<div style="font-size:13px;color:#6b6258;font-style:italic;margin-top:8px;padding-top:8px;border-top:0.5px solid #252220;">${esc(ex.notes)}</div>` : ''}
+    </div>`).join('')}
+  </div>`;
+}
+
+// Render
+function render() {
+  const now = new Date();
+  document.getElementById('hdr-date').textContent =
+    `${now.getDate()} ${now.toLocaleString('en-US',{month:'short'}).toUpperCase()} ${now.getFullYear()}`;
+
+  const activeTab = view === 'today' ? 'today' : 'history';
+  document.getElementById('btm-nav').innerHTML = ['today','history'].map(t =>
+    `<button class="tab${t===activeTab?' on':''}" onclick="setView('${t}');">${t.toUpperCase()}</button>`
+  ).join('');
+
+  let html = '';
+  if      (view==='today'           ) html = todayHTML();
+  else if (view==='history'         ) html = historyHTML();
+  else if (view==='detail' && detail) html = detailHTML(detail);
+  document.getElementById('scroll').innerHTML = html;
+
+  if (view === 'today' && tState !== 'idle') renderTimerBar();
+}
+
+render();
+</script>
+</body>
+</html>
