@@ -249,7 +249,7 @@ function addSet(exId) {
   const ex = session.exercises.find(e => e.id === exId);
   if (!ex) return;
   const last = ex.sets[ex.sets.length-1];
-  ex.sets.push({id:uid(), weight:last?.weight||'', reps:last?.reps||'', intensifier:''});
+  ex.sets.push({id:uid(), weight:'', reps:'', intensifier:''});
   patchSets(exId);
 }
 function removeSet(exId, sId) {
@@ -455,7 +455,7 @@ function exCardHTML(ex) {
   return `<div class="card">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
       <input type="text" placeholder="Exercise name" value="${esc(ex.name)}"
-        oninput="onExName('${ex.id}',this.value)"
+        autocapitalize="none" autocorrect="off" oninput="onExName('${ex.id}',this.value)"
         style="flex:1;background:transparent;border:none;border-bottom:0.5px solid #2a2724;border-radius:0;padding:5px 0;font-size:18px;font-weight:500;" />
       <button onclick="removeEx('${ex.id}')" style="background:none;border:none;color:#6b6258;font-size:22px;line-height:1;padding:4px 6px;opacity:0.4;">×</button>
     </div>
